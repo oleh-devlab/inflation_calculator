@@ -1,12 +1,13 @@
 """
-Скрипт імпорту даних інфляції з локального джерела.
+Script for importing inflation data from a local source.
 
-Парсить «сирі» дані (копію таблиці з сайту МінФіну) та зберігає
-помісячні коефіцієнти інфляції у JSON-файл, сумісний з основною програмою.
+Parses "raw" data (a copy of a table from the Ministry of Finance website)
+and saves monthly inflation multipliers to a JSON file compatible with the
+main application.
 
-Використання:
-    python import_local_data.py                     # парсить дані з RAW_DATA_STRING
-    python import_local_data.py --input raw.txt     # парсить дані з файлу
+Usage:
+    python import_local_data.py                     # parses data from RAW_DATA_STRING
+    python import_local_data.py --input raw.txt     # parses data from a file
 """
 
 import argparse
@@ -14,25 +15,25 @@ import re
 import sys
 from decimal import Decimal, InvalidOperation
 
-# Використовуємо єдиний конфіг проєкту для шляхів
+# Use the project's single config for paths
 sys.path.insert(0, __import__('os').path.dirname(__import__('os').path.dirname(__import__('os').path.abspath(__file__))))
 from modules.config import INFLATION_RATES_FILENAME
 from modules.storage import load_inflation_rates_from_file, save_inflation_rates_to_file
 
 
-# Кількість місяців у році + 1 річний підсумок
+# Number of months in a year + 1 annual summary
 _EXPECTED_VALUES_PER_YEAR = 13
 
-# Рік у форматі 20xx
+# Year in 20xx format
 _YEAR_BLOCK_REGEX = re.compile(r"(20\d{2})(.+?)(?=20\d{2}|$)", flags=re.DOTALL)
 
-# Число інфляції: 2-3 цифри, кома, 1 цифра (напр. "104,6" або "99,9")
+# Inflation number: 2-3 digits, comma, 1 digit (e.g. "104,6" or "99,9")
 _NUMBER_REGEX = re.compile(r"(\d{2,3},\d)")
 
 
 # ---------------------------------------------------------------------------
-# "Сирі" дані — вставте сюди копію таблиці з сайту МінФіну,
-# або передайте файл через аргумент --input
+# "Raw" data — paste a copy of the table from the Ministry of Finance website
+# here, or pass a file via the --input argument
 # ---------------------------------------------------------------------------
 RAW_DATA_STRING = """
 
@@ -40,24 +41,24 @@ RAW_DATA_STRING = """
 
 
 def parse_raw_data(raw_text: str) -> dict[str, str]:
-    """Парсить сирий текст таблиці інфляції та повертає словник коефіцієнтів.
+    """Parses raw inflation table text and returns a dictionary of multipliers.
 
     Args:
-        raw_text: Текст із таблиці МінФіну (рядки з роками та значеннями).
+        raw_text: Text from the Ministry of Finance table (rows with years and values).
 
     Returns:
-        Словник ``{"YYYY-MM": "коефіцієнт", ...}``, де коефіцієнт — рядок
-        Decimal-сумісного числа (напр. ``"1.046"``).
+        Dictionary ``{"YYYY-MM": "multiplier", ...}``, where the multiplier is a
+        Decimal-compatible string (e.g. ``"1.046"``).
 
     Raises:
-        ValueError: Якщо у тексті не знайдено жодного блоку даних.
+        ValueError: If no data blocks are found in the text.
     """
     clean_text = raw_text.replace("\n", "")
     year_blocks = _YEAR_BLOCK_REGEX.findall(clean_text)
 
     if not year_blocks:
         raise ValueError(
-            "Не знайдено жодного блоку даних. Перевірте вхідний текст."
+            "No data blocks found. Please check the input text."
         )
 
     result: dict[str, str] = {}
@@ -67,10 +68,10 @@ def parse_raw_data(raw_text: str) -> dict[str, str]:
         numbers = _NUMBER_REGEX.findall(numbers_str)
 
         if len(numbers) != _EXPECTED_VALUES_PER_YEAR:
-            skipped_years.append(f"{year_str} ({len(numbers)} значень)")
+            skipped_years.append(f"{year_str} ({len(numbers)} values)")
             continue
 
-        # Перші 12 значень — місяці (Січень … Грудень)
+        # First 12 values — months (January … December)
         for month_index, value_str in enumerate(numbers[:12], start=1):
             key = f"{year_str}-{month_index:02d}"
 
@@ -78,22 +79,22 @@ def parse_raw_data(raw_text: str) -> dict[str, str]:
                 multiplier = Decimal(value_str.replace(",", ".")) / Decimal("100")
                 result[key] = str(multiplier)
             except InvalidOperation:
-                print(f"  [!] Некоректне значення «{value_str}» для {key}, пропущено.")
+                print(f"  [!] Invalid value '{value_str}' for {key}, skipped.")
 
     if skipped_years:
-        print(f"  [!] Пропущено роки: {', '.join(skipped_years)}")
+        print(f"  [!] Skipped years: {', '.join(skipped_years)}")
 
     return result
 
 
 def read_input_text(filepath: str | None) -> str:
-    """Повертає сирий текст: з файлу або з вбудованої константи."""
+    """Returns raw text: from a file or from the built-in constant."""
     if filepath:
         try:
             with open(filepath, "r", encoding="utf-8") as f:
                 return f.read()
         except OSError as e:
-            print(f"[Помилка] Не вдалося прочитати файл «{filepath}»: {e}")
+            print(f"[Error] Failed to read file '{filepath}': {e}")
             sys.exit(1)
 
     return RAW_DATA_STRING
@@ -101,49 +102,49 @@ def read_input_text(filepath: str | None) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Імпорт даних інфляції з локального джерела у JSON."
+        description="Import inflation data from a local source into JSON."
     )
     parser.add_argument(
         "--input", "-i",
         metavar="FILE",
-        help="Шлях до текстового файлу із сирими даними (замість RAW_DATA_STRING).",
+        help="Path to a text file with raw data (instead of RAW_DATA_STRING).",
     )
     parser.add_argument(
         "--merge",
         action="store_true",
-        help="Доповнити наявний файл замість перезаписування.",
+        help="Merge with existing file instead of overwriting.",
     )
     args = parser.parse_args()
 
-    # 1. Зчитуємо вхідні дані
+    # 1. Read input data
     raw_text = read_input_text(args.input)
 
     if not raw_text.strip():
-        print("[Помилка] Вхідні дані порожні.")
-        print("  Вставте дані у RAW_DATA_STRING або передайте файл через --input.")
+        print("[Error] Input data is empty.")
+        print("  Paste data into RAW_DATA_STRING or pass a file via --input.")
         sys.exit(1)
 
-    # 2. Парсимо
-    print("Починаю парсинг даних…")
+    # 2. Parse
+    print("Starting data parsing...")
     try:
         parsed = parse_raw_data(raw_text)
     except ValueError as e:
-        print(f"[Помилка] {e}")
+        print(f"[Error] {e}")
         sys.exit(1)
 
-    print(f"Розпізнано {len(parsed)} місячних записів.")
+    print(f"Recognized {len(parsed)} monthly records.")
 
-    # 3. Зберігаємо (через єдиний storage-модуль проєкту)
+    # 3. Save (via the project's single storage module)
     if args.merge:
         existing = load_inflation_rates_from_file(INFLATION_RATES_FILENAME)
-        # Конвертуємо Decimal → str для сумісності
+        # Convert Decimal → str for compatibility
         merged = {k: str(v) for k, v in existing.items()}
         merged.update(parsed)
         parsed = merged
-        print(f"Після злиття: {len(parsed)} записів загалом.")
+        print(f"After merge: {len(parsed)} records total.")
 
     save_inflation_rates_to_file(parsed, INFLATION_RATES_FILENAME)
-    print("Готово! Тепер можна запускати основну програму.")
+    print("Done! You can now run the main application.")
 
 
 if __name__ == "__main__":

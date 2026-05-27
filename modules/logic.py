@@ -4,10 +4,10 @@ from .config import FALLBACK_ANNUAL_INFLATION_RATE
 
 def check_inflation_data_gaps(rates: dict) -> str | None:
     """
-    Перевіряє дані інфляції на пропущені місяці ("дірки").
+    Checks inflation data for missing months ("gaps").
     """
     if not rates:
-        return "  [!] Увага: База даних інфляції порожня. (Використовується 8% річних)"
+        return "  [!] Warning: Inflation database is empty. (Using 8% annual rate)"
 
     all_keys = sorted(rates.keys())
     oldest_key_date = datetime.date.fromisoformat(all_keys[0] + "-01")
@@ -24,7 +24,7 @@ def check_inflation_data_gaps(rates: dict) -> str | None:
         if key not in rates:
             missing_months.append(key)
         
-        # Наступний місяць
+        # Next month
         year, month = loop_date.year, loop_date.month
         month += 1
         if month > 12:
@@ -34,21 +34,21 @@ def check_inflation_data_gaps(rates: dict) -> str | None:
 
     if missing_months:
         if len(missing_months) > 7:
-            return (f"  [!] Увага: Пропущено {len(missing_months)} міс. інфляції (починаючи з {missing_months[0]})\n"
-                   f"      У розрахунках ці місяці будуть враховані як 0% інфляції!")
+            return (f"  [!] Warning: Missing {len(missing_months)} months of inflation data (starting from {missing_months[0]})\n"
+                   f"      These months will be treated as 0% inflation in calculations!")
         else:
-            return (f"  [!] Увага: Пропущено дані інфляції за: {', '.join(missing_months)}.\n"
-                   f"      У розрахунках ці місяці будуть враховані як 0% інфляції!")
+            return (f"  [!] Warning: Missing inflation data for: {', '.join(missing_months)}.\n"
+                   f"      These months will be treated as 0% inflation in calculations!")
             
     return None
 
 def get_current_value(amount: Decimal, date: datetime.date, inflation_rates: dict) -> Decimal:
-    """Розраховує сьогоднішню вартість суми."""
+    """Calculates today's value of the given amount."""
     today = datetime.date.today()
     if date >= today:
         return amount
 
-    # Випадок 1: Стара формула
+    # Case 1: Old formula (fallback)
     if not inflation_rates:
         days_diff = (today - date).days
         years_diff = Decimal(days_diff) / Decimal('365.25')
@@ -58,7 +58,7 @@ def get_current_value(amount: Decimal, date: datetime.date, inflation_rates: dic
     current_amount = amount
     current_calc_date = date
 
-    # Випадок 2: Гібридний розрахунок
+    # Case 2: Hybrid calculation
     oldest_rate_key = min(inflation_rates.keys())
     oldest_known_date = datetime.date.fromisoformat(oldest_rate_key + "-01")
 
@@ -80,7 +80,7 @@ def get_current_value(amount: Decimal, date: datetime.date, inflation_rates: dic
         if loop_key in inflation_rates:
             current_amount = current_amount * inflation_rates[loop_key]
         
-        # Наступний місяць
+        # Next month
         year, month = loop_date.year, loop_date.month
         month += 1
         if month > 12:

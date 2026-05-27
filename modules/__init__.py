@@ -1,1 +1,1 @@
-# Ініціалізація пакету modules
+# Initialization of the modules package

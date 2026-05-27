@@ -13,18 +13,18 @@ from modules.ui import (
 )
 
 def show_main_menu(warning_message: str | None, current_filename: str):
-    print("\n-==== Калькулятор Впливу Інфляції ====-")
-    print(f"    (Профіль: {os.path.basename(current_filename)})")
+    print("\n-==== Inflation Impact Calculator ====-")
+    print(f"    (Profile: {os.path.basename(current_filename)})")
     if warning_message:
         print(warning_message)
     print("------------------------------------------")
-    print("1. Додати нові записи")
-    print("2. Стерти записи")
-    print("3. Звіт")
+    print("1. Add new records")
+    print("2. Delete records")
+    print("3. Report")
     print("---")
-    print("4. Інфляція (база даних)")
-    print("5. Налаштування / Зміна профілю")
-    print("0. Вихід")
+    print("4. Inflation (database)")
+    print("5. Settings / Change profile")
+    print("0. Exit")
     print("------------------------------------------")
 
 def main():
@@ -38,7 +38,7 @@ def main():
 
     while True:
         show_main_menu(menu_warning, current_records_filepath)
-        choice = input("Ваш вибір: ").strip()
+        choice = input("Your choice: ").strip()
 
         if choice == '1':
             add_record_loop(records_storage, current_records_filepath)
@@ -57,13 +57,13 @@ def main():
             records_storage, current_records_filepath = settings_menu(records_storage, current_records_filepath)
         
         elif choice == '0':
-            print("До побачення!")
+            print("Goodbye!")
             break
         else:
-            print("Неправильний вибір.")
+            print("Invalid choice.")
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("\nВихід.")
+        print("\nExiting.")
