@@ -2,7 +2,7 @@ import os
 import sys
 from decimal import Decimal, getcontext
 
-# --- Налаштування ---
+# --- Configuration ---
 def setup_config():
     getcontext().prec = 18 
 
@@ -10,10 +10,10 @@ setup_config()
 
 FALLBACK_ANNUAL_INFLATION_RATE = Decimal('0.08')
 
-# --- Надійна логіка для визначення директорії скрипта ---
+# --- Robust logic for determining the script directory ---
 def get_script_dir():
     try:
-        # Піднімаємось на один рівень вище, оскільки знаходимось у modules/config.py
+        # Go up one level since we are in modules/config.py
         return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     except NameError:
         pass
@@ -25,7 +25,7 @@ def get_script_dir():
 
 script_dir = get_script_dir()
 
-# --- СИСТЕМА ШЛЯХІВ ---
+# --- PATH SYSTEM ---
 DATA_FOLDER_NAME = 'data_records'
 DATA_DIR = os.path.join(script_dir, DATA_FOLDER_NAME)
 
@@ -34,9 +34,9 @@ def init_directories():
         try:
             os.makedirs(DATA_DIR)
         except OSError as e:
-            print(f"[Помилка] Не вдалося створити папку для даних: {e}")
+            print(f"[Error] Failed to create data directory: {e}")
 
-# Викликаємо ініціалізацію одразу при імпорті
+# Initialize directories immediately on import
 init_directories()
 
 INFLATION_RATES_FILENAME = os.path.join(script_dir, 'inflation_rates.json')
