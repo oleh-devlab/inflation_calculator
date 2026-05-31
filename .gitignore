@@ -1,12 +1,7 @@
 __pycache__/
 *.pyc
 .env
-scripts/__pycache__/
-scripts/*.pyc
-modules/__pycache__/
-modules/*.pyc
 data_records/
-рез_копія.json
 archive/
 TODO.md
 inflation_rates.json
