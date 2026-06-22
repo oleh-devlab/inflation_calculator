@@ -16,9 +16,14 @@ import sys
 from decimal import Decimal, InvalidOperation
 
 # Use the project's single config for paths
-sys.path.insert(0, __import__('os').path.dirname(__import__('os').path.dirname(__import__('os').path.abspath(__file__))))
-from modules.config import INFLATION_RATES_FILENAME
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+from modules.config import DEFAULT_INFLATION_RATES_FILENAME
 from modules.storage import load_inflation_rates_from_file, save_inflation_rates_to_file
+
+INFLATION_RATES_FILENAME = os.path.join(_SCRIPT_DIR, DEFAULT_INFLATION_RATES_FILENAME)
 
 
 # Number of months in a year + 1 annual summary

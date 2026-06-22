@@ -2,11 +2,18 @@ import os
 import datetime
 from decimal import Decimal
 
-from .logic import get_current_value
-from .storage import save_records_to_file, save_inflation_rates_to_file, load_records_from_file
-from .config import DATA_DIR, INFLATION_RATES_FILENAME
+from .api import InflationCalculator
+from .exceptions import (
+    InvalidAmountError,
+    InvalidDateError,
+    RecordNotFoundError,
+    StorageError,
+    InvalidInflationRateError,
+)
 
-def print_records_list(records: list, with_inflation: bool, inflation_rates: dict):
+
+def print_records_list(calc: InflationCalculator, with_inflation: bool):
+    records = calc.get_records()
     if not records:
         print("Records list is empty.")
         return
@@ -18,7 +25,7 @@ def print_records_list(records: list, with_inflation: bool, inflation_rates: dic
         comment_str = f" | {record.get('comment')}" if record.get('comment') else ""
         line = f"{i+1}. Amount: {record['amount']:.2f} UAH | Date: {record['date']}{comment_str}"
         if with_inflation:
-            adjusted_val = get_current_value(record['amount'], record['date'], inflation_rates)
+            adjusted_val = calc.calculate_current_value(record['amount'], record['date'])
             loss_percent = Decimal(0)
             if adjusted_val > record['amount']:
                 loss_percent = (1 - (record['amount'] / adjusted_val)) * 100
@@ -27,9 +34,9 @@ def print_records_list(records: list, with_inflation: bool, inflation_rates: dic
         print(line)
     print("-" * 50)
 
-def add_record_loop(records: list, current_filename_path: str):
+def add_record_loop(calc: InflationCalculator):
     """Action 1: Adding records."""
-    print(f"\n--- Adding new records (file: {os.path.basename(current_filename_path)}) ---")
+    print(f"\n--- Adding new records (file: {os.path.basename(calc.records_filepath)}) ---")
     
     records_added_count = 0
     
@@ -65,21 +72,21 @@ def add_record_loop(records: list, current_filename_path: str):
         comment = input("Comment (or 0 to skip): ").strip()
         if comment == '0': comment = ""
 
-        records.append({'amount': amount, 'date': date_obj, 'comment': comment})
-        records_added_count += 1
-        print(f"[Success] Added: {amount:.2f} UAH")
+        try:
+            calc.add_record(amount, date_obj, comment)
+            records_added_count += 1
+            print(f"[Success] Added: {amount:.2f} UAH")
+        except (InvalidAmountError, InvalidDateError, StorageError) as e:
+            print(f"Error: {e}")
 
-    if records_added_count > 0:
-        print(f"Saving data to {os.path.basename(current_filename_path)}...")
-        save_records_to_file(records, current_filename_path)
-    else:
+    if records_added_count == 0:
         print("Exiting without changes.")
 
-def delete_record(records: list, current_filename_path: str):
+def delete_record(calc: InflationCalculator):
     """Action 2: Deleting records."""
-    print(f"\n--- Deleting records (file: {os.path.basename(current_filename_path)}) ---")
+    print(f"\n--- Deleting records (file: {os.path.basename(calc.records_filepath)}) ---")
     
-    if not records:
+    if calc.records_count == 0:
         print("No records found.")
         return
 
@@ -87,65 +94,56 @@ def delete_record(records: list, current_filename_path: str):
     
     while True:
         print("\nCurrent records:")
-        print_records_list(records, with_inflation=False, inflation_rates={}) 
+        print_records_list(calc, with_inflation=False) 
         
-        print("\nEnter number (1...N), -1 (all), 0 (exit)")
+        print(f"\nEnter number (1...{calc.records_count}), -1 (all), 0 (exit)")
         try:
             choice = int(input("Choice: "))
             if choice == 0: break
             
             if choice == -1:
                 if input("Delete ALL? (yes/no): ").lower() == 'yes':
-                    records.clear()
+                    count = calc.delete_all_records()
                     data_was_changed = True
-                    print("Cleared.")
+                    print(f"Cleared ({count} records deleted).")
                     break
             
-            elif 1 <= choice <= len(records):
-                rem = records.pop(choice - 1)
-                data_was_changed = True
-                print(f"Deleted: {rem['amount']} UAH")
-                if not records: break
+            elif 1 <= choice <= calc.records_count:
+                try:
+                    removed = calc.delete_record(choice - 1)
+                    data_was_changed = True
+                    print(f"Deleted: {removed['amount']} UAH")
+                    if calc.records_count == 0: break
+                except RecordNotFoundError as e:
+                    print(f"Error: {e}")
             else:
                 print("Invalid number.")
         except ValueError:
             print("Enter an integer.")
 
     if data_was_changed:
-        save_records_to_file(records, current_filename_path)
         print("Changes saved.")
 
-def show_processed_data(records: list, inflation_rates: dict, current_filename_path: str):
+def show_processed_data(calc: InflationCalculator):
     """Action 3: Report."""
-    filename = os.path.basename(current_filename_path)
+    filename = os.path.basename(calc.records_filepath)
     print(f"\n--- Data Analysis (Profile: {filename}) ---")
     
-    if not records:
+    report = calc.get_report()
+    
+    if not report["records"]:
         print("No data available.")
         return
 
-    q = Decimal('0.01')
-    total_raw = sum(r['amount'] for r in records).quantize(q)
-    oldest_date = min(r['date'] for r in records)
-    
-    total_adjusted = Decimal(0)
-    for r in records:
-        total_adjusted += get_current_value(r['amount'], r['date'], inflation_rates)
-    total_adjusted = total_adjusted.quantize(q)
-        
-    total_loss_percent = Decimal(0)
-    if total_adjusted > total_raw and total_raw > 0:
-        total_loss_percent = (1 - (total_raw / total_adjusted)) * 100
-    
-    print(f"Total amount (nominal):         {total_raw} UAH")
-    print(f"Oldest record:                  {oldest_date}")
-    print(f"Real value today:               {total_adjusted} UAH")
-    print(f"Purchasing power loss:           {total_loss_percent.quantize(q)}%")
+    print(f"Total amount (nominal):         {report['total_nominal']} UAH")
+    print(f"Oldest record:                  {report['oldest_date']}")
+    print(f"Real value today:               {report['total_adjusted']} UAH")
+    print(f"Purchasing power loss:           {report['loss_percent']}%")
     
     print("\nDetails:")
-    print_records_list(records, with_inflation=True, inflation_rates=inflation_rates)
+    print_records_list(calc, with_inflation=True)
 
-def add_inflation_data_loop(inflation_rates: dict):
+def add_inflation_data_loop(calc: InflationCalculator):
     """Action 4: Entering inflation data."""
     print("\n--- Enter Inflation Data ---")
     print("Example: for 1.4% inflation enter '101.4'")
@@ -161,9 +159,11 @@ def add_inflation_data_loop(inflation_rates: dict):
     current_date = start_date
     added_count = 0
     
+    rates = calc.get_inflation_rates()
+    
     while True:
         current_key = current_date.strftime("%Y-%m") 
-        existing = f" (current: {inflation_rates[current_key]*100}) " if current_key in inflation_rates else ""
+        existing = f" (current: {rates[current_key]*100}) " if current_key in rates else ""
         
         rate_str = input(f"Inflation for {current_key}{existing} (0 to exit): ").strip()
         if rate_str == '0': break
@@ -182,7 +182,8 @@ def add_inflation_data_loop(inflation_rates: dict):
                 if confirm != 'yes':
                     continue
                 
-            inflation_rates[current_key] = rate_decimal / Decimal('100')
+            calc.set_inflation_rate(current_key, rate_decimal)
+            rates = calc.get_inflation_rates()  # refresh local copy
             added_count += 1
             
             # Next month
@@ -191,20 +192,22 @@ def add_inflation_data_loop(inflation_rates: dict):
             if month > 12: month, year = 1, year + 1
             current_date = datetime.date(year, month, 1)
 
+        except InvalidInflationRateError as e:
+            print(f"Error: {e}")
         except Exception as e:
             print(f"Error: {e}")
 
     if added_count > 0:
-        save_inflation_rates_to_file(inflation_rates, INFLATION_RATES_FILENAME)
         print("Data saved.")
 
-def settings_menu(current_records: list, current_filepath: str):
+def settings_menu(calc: InflationCalculator, data_dir: str):
     """
     Action 5: Settings and file selection.
-    Returns (new_records_list, new_filepath).
+    Returns a new InflationCalculator if the profile was changed,
+    or the same one if not.
     """
     while True:
-        current_name = os.path.basename(current_filepath)
+        current_name = os.path.basename(calc.records_filepath)
         print(f"\n--- Settings (Current file: {current_name}) ---")
         print("1. Change/Create records file")
         print("0. Back to main menu")
@@ -212,7 +215,7 @@ def settings_menu(current_records: list, current_filepath: str):
         choice = input("Your choice: ").strip()
         
         if choice == '1':
-            files = [f for f in os.listdir(DATA_DIR) if f.endswith('.json')]
+            files = [f for f in os.listdir(data_dir) if f.endswith('.json')]
             files.sort()
             
             print("\nAvailable files:")
@@ -239,24 +242,28 @@ def settings_menu(current_records: list, current_filepath: str):
                         if not new_name.endswith('.json'):
                             new_name += '.json'
                         selected_file = new_name
-                        full_path = os.path.join(DATA_DIR, selected_file)
-                        if not os.path.exists(full_path):
-                            save_records_to_file([], full_path)
                     else:
                         print("Name cannot be empty.")
             except ValueError:
                 print("Invalid input.")
             
             if selected_file:
-                save_records_to_file(current_records, current_filepath)
+                # Save current records before switching
+                try:
+                    calc.save()
+                except StorageError as e:
+                    print(f"Warning: Could not save current data: {e}")
                 
-                new_full_path = os.path.join(DATA_DIR, selected_file)
-                new_records = load_records_from_file(new_full_path)
+                new_filepath = os.path.join(data_dir, selected_file)
+                new_calc = InflationCalculator(
+                    records_filepath=new_filepath,
+                    inflation_rates_filepath=calc.inflation_rates_filepath,
+                )
                 
                 print(f"[Success] Switched to file: {selected_file}")
-                return new_records, new_full_path
+                return new_calc
                 
         elif choice == '0':
-            return current_records, current_filepath
+            return calc
         else:
             print("Invalid choice.")

@@ -1,9 +1,8 @@
 import os
 import sys
 
-from modules.config import DATA_DIR, INFLATION_RATES_FILENAME
-from modules.storage import load_records_from_file, load_inflation_rates_from_file
-from modules.logic import check_inflation_data_gaps
+from modules import InflationCalculator
+from modules.config import DEFAULT_DATA_FOLDER_NAME, DEFAULT_INFLATION_RATES_FILENAME
 from modules.ui import (
     add_record_loop,
     delete_record,
@@ -11,6 +10,12 @@ from modules.ui import (
     add_inflation_data_loop,
     settings_menu
 )
+
+# --- Path setup (consumer responsibility) ---
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(SCRIPT_DIR, DEFAULT_DATA_FOLDER_NAME)
+INFLATION_RATES_FILEPATH = os.path.join(SCRIPT_DIR, DEFAULT_INFLATION_RATES_FILENAME)
+
 
 def show_main_menu(warning_message: str | None, current_filename: str):
     print("\n-==== Inflation Impact Calculator ====-")
@@ -29,32 +34,34 @@ def show_main_menu(warning_message: str | None, current_filename: str):
 
 def main():
     default_filename = "default.json"
-    current_records_filepath = os.path.join(DATA_DIR, default_filename)
-    
-    records_storage = load_records_from_file(current_records_filepath)
-    inflation_rates_storage = load_inflation_rates_from_file(INFLATION_RATES_FILENAME)
+    default_records_filepath = os.path.join(DATA_DIR, default_filename)
 
-    menu_warning = check_inflation_data_gaps(inflation_rates_storage)
+    calc = InflationCalculator(
+        records_filepath=default_records_filepath,
+        inflation_rates_filepath=INFLATION_RATES_FILEPATH,
+    )
+
+    menu_warning = calc.check_data_gaps()
 
     while True:
-        show_main_menu(menu_warning, current_records_filepath)
+        show_main_menu(menu_warning, calc.records_filepath)
         choice = input("Your choice: ").strip()
 
         if choice == '1':
-            add_record_loop(records_storage, current_records_filepath)
+            add_record_loop(calc)
         
         elif choice == '2':
-            delete_record(records_storage, current_records_filepath)
+            delete_record(calc)
             
         elif choice == '3':
-            show_processed_data(records_storage, inflation_rates_storage, current_records_filepath)
+            show_processed_data(calc)
             
         elif choice == '4':
-            add_inflation_data_loop(inflation_rates_storage)
-            menu_warning = check_inflation_data_gaps(inflation_rates_storage)
+            add_inflation_data_loop(calc)
+            menu_warning = calc.check_data_gaps()
 
         elif choice == '5':
-            records_storage, current_records_filepath = settings_menu(records_storage, current_records_filepath)
+            calc = settings_menu(calc, DATA_DIR)
         
         elif choice == '0':
             print("Goodbye!")

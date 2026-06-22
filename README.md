@@ -6,6 +6,7 @@ This project is an inflation calculator that calculates the inflation rate betwe
 ## Features
 
 - **Inflation-adjusted value calculation** — computes today's value of a past amount using monthly CPI data
+- **Library API** — full functionality is available via a decoupled `InflationCalculator` class for use in other projects
 - **Multiple profiles** — manage separate record sets via JSON-based profiles in `data_records/`
 - **Inflation data import** — bulk-import monthly rates from raw text with the `import_local_data.py` script
 - **Gap detection** — warns about missing months in the inflation database and falls back to an 8 % annual rate
@@ -63,7 +64,28 @@ python scripts/import_local_data.py
 ### Running tests
 
 ```bash
-python -m pytest tests/
+python -m unittest tests.test_import_local_data -v
+```
+
+### Using as a Library
+
+You can use the inflation calculator programmatically in other Python projects:
+
+```python
+import datetime
+from modules import InflationCalculator
+
+calc = InflationCalculator(
+    records_filepath="data_records/default.json",
+    inflation_rates_filepath="inflation_rates.json"
+)
+
+# Add a record
+calc.add_record(amount="5000", date=datetime.date(2023, 6, 1), comment="Salary")
+
+# Get report
+report = calc.get_report()
+print(f"Total Adjusted: {report['total_adjusted']} UAH")
 ```
 
 ## Project Structure
@@ -75,11 +97,13 @@ inflation_calculator/
 ├── inflation_rates.json.example   # Example data file
 ├── requirements.txt               # Dependencies (none)
 ├── modules/
-│   ├── __init__.py
-│   ├── config.py                  # Paths, constants, Decimal precision
+│   ├── __init__.py                # Re-exports InflationCalculator and exceptions
+│   ├── api.py                     # Main library API (InflationCalculator class)
+│   ├── config.py                  # Default constants and Decimal precision
+│   ├── exceptions.py              # Custom error hierarchy
 │   ├── logic.py                   # Core calculations & gap detection
 │   ├── storage.py                 # JSON read / write helpers
-│   └── ui.py                      # Interactive CLI
+│   └── ui.py                      # Interactive CLI presentation layer
 ├── scripts/
 │   └── import_local_data.py       # Bulk CPI data importer
 ├── tests/
